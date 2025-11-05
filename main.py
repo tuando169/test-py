@@ -1,11 +1,10 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
-import io
+import io, json
 
 app = FastAPI()
 
-# Cho phép gọi API từ web khác (CORS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,7 +18,6 @@ def home():
     return {"message": "Hello Render!"}
 
 
-# 📸 API: Nhận file ảnh, trả thông tin ảnh
 @app.post("/analyze-image/")
 async def analyze_image(file: UploadFile = File(...)):
     try:
@@ -31,7 +29,19 @@ async def analyze_image(file: UploadFile = File(...)):
     width, height = image.size
     format = image.format
     mode = image.mode
-    info = image.info  # metadata (EXIF, dpi, ...)
+
+    # Xử lý metadata (convert các giá trị bytes -> str)
+    safe_info = {}
+    for k, v in image.info.items():
+        try:
+            if isinstance(v, bytes):
+                safe_info[k] = v.decode("utf-8", errors="ignore")
+            else:
+                # đảm bảo giá trị có thể JSON serialize
+                json.dumps(v)
+                safe_info[k] = v
+        except Exception:
+            safe_info[k] = str(v)
 
     return {
         "filename": file.filename,
@@ -39,5 +49,5 @@ async def analyze_image(file: UploadFile = File(...)):
         "mode": mode,
         "width": width,
         "height": height,
-        "metadata": info,
+        "metadata": safe_info,
     }
